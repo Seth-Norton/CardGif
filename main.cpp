@@ -15,11 +15,15 @@
  *  Started:    Aug. 20, 2016
  */
 
+#include <iostream>
 #include <fstream>  //For output file stream
 #include <string.h> //For memset()
+#include <math.h>   //For sin/cos
 
-#define W 1000      //Just for setting framebuffer size
-#define H 1000      //without complaints about variable size
+#define W 100      //Just for setting framebuffer size
+#define H 100      //without complaints about variable size
+
+#define DATASIZE 3
 
 using namespace std;
 
@@ -76,6 +80,36 @@ uint8_t frameBuf[W*H];      //Basically a frame buffer object where we will rast
 char trailer = ';';         //Should be last byte in file
 
 ofstream outfile ("test.gif", ofstream::binary);
+
+
+//---   3D DATA   ---//
+
+/*
+ * Thank you Paul Heckbert for this elegant vector setup.
+ */
+struct vec{
+    float x,y,z,w;
+    vec(){}
+    vec(float a, float b, float c, float d){
+        x=a;
+        y=b;
+        z=c;
+        w=d;
+    }
+    vec operator+(vec b){
+        return vec(x+b.x,y+b.y,z+b.z,w+b.z);
+    }
+    vec operator*(float b){
+        return vec(x*b,y*b,z*b,w*b);
+    }
+    float operator%(vec b){
+        return x*b.x+y*b.y+z*b.z+w*b.w;
+    }
+};
+
+vec view[4];
+vec persp[4];
+vec points[DATASIZE];
 
 
 
@@ -169,19 +203,77 @@ void writeEndFile(){
 }
 
 
-
-//---   IMAGE PREPARATION FUNCTIONS   ---//
-/*
- * Soon we will start drawing pictures here
- */
-void render(){
-    for(uint16_t y=0; y<width; y++){
-        for(uint16_t x=0; x<height; x++){
-            frameBuf[(y*width)+x] = x&127;
-        }
-    }
+//---   3D DESCRIPTION FUNCTIONS   ---//
+vec matrixMult(vec* a, vec b){
+    return(vec(a[0]%b, a[1]%b, a[2]%b, a[3]%b));
 }
 
+/*
+ * Translates scene to z=3.
+ * Perspective is a 90 degree frustum with z-near=1, z-far=100
+ */
+void setView(){
+    view[0]=vec(1, 0, 0, 0);
+    view[1]=vec(0, 1, 0, 0);
+    view[2]=vec(0, 0, 1, 3);
+    view[3]=vec(0, 0, 0, 1);
+
+    persp[0]=vec(1.0f      , 0          , 0           , 0);
+    persp[1]=vec(0         ,-1.0f, 0           , 0);
+    persp[2]=vec(0         , 0          , 101.0f/99.0f,-200.0f/99.0f);
+    persp[3]=vec(0         , 0          , 1           , 0);
+
+    //  Debug   //
+    /*cout << "-- View matrix --" << endl;
+    for(int i=0; i<4; i++){
+        cout << view[i].x << " " << view[i].y << " "
+             << view[i].z << " " << view[i].w << " ";
+        cout << endl;
+    }
+    cout << endl << "-- Perspective matrix --" << endl;
+    for(int i=0; i<4; i++){
+        cout << persp[i].x << " " << persp[i].y << " "
+             << persp[i].z << " " << persp[i].w << " ";
+        cout << endl;
+    }
+
+    vec pos(3, 0, 0, 1);
+    cout << endl << "-- Pre-Translation --" << endl;
+    cout << pos.x << " " << pos.y << " "
+         << pos.z << " " << pos.w << " ";
+    cout << endl;
+
+    vec temp = matrixMult(view, pos);
+    temp = matrixMult(persp, temp);
+    temp = temp*(1.0f/temp.w);
+    cout << "-- Translated --" << endl;
+    cout << temp.x << " " << temp.y << " "
+         << temp.z << " " << temp.w << " ";
+    cout << endl;*/
+}
+
+void rot(float deg){
+    setView();
+    deg=deg*3.14159/180.0;
+    view[0]=vec(cos(deg),-sin(deg),0,0);
+    view[1]=vec(sin(deg),cos(deg),0,0);
+}
+
+/*
+ * We'll replace this later with procedural triangles.
+ */
+void makeData(){
+    points[0]=vec(0.0f , .7f,0.0f,1.0f);
+    points[1]=vec(-1.0f,-.7f,0.0f,1.0f);
+    points[2]=vec(1.0f ,-.7f,0.0f,1.0f);
+}
+
+
+
+
+
+
+//---   IMAGE PREPARATION FUNCTIONS   ---//
 /*
  * Provides pure black slate to draw on
  */
@@ -190,23 +282,53 @@ void clearFrameBuf(){
 }
 
 
+/*
+ * It may not be pretty, but now we take points
+ * and put them as 20-pixel-wide horizontal lines.
+ * Seeing as the points are in a nice line themselves,
+ * it will make a thick line across the screen.
+ */
+void render(){
+    clearFrameBuf();
+    for(int i=0; i<DATASIZE; i++){
+        vec v;
+        v = matrixMult(view, points[i]);
+        v = matrixMult(persp, v);
+        if(v.w > 0)
+            v = v*(1.0f/v.w);   // Correct for perspective
+
+        int lineWidth = 20;
+        for(int j=0; j<lineWidth; j++){
+            if(v.y < 1.0f && v.x < 1.0f &&
+               v.y >-1.0f && v.x >-1.0f){
+                vec pix(v.x*width, v.y*height, v.z, v.w);
+                frameBuf[((int)pix.y*width)+((height/2)*width)+(int)pix.x+j-lineWidth/2+width/2] = 126;
+            }
+            else{
+                cout << "Culled" << endl;
+            }
+        }
+    }
+}
+
+
 //---  MAIN LOGIC  ---//
 int main()
 {
+    setView();
+    makeData();
+
     writeHeader();  //Set up file
     writeGCT();
     writeForceLoop();
 
-    render();
-    writeFrameBuf();//.8 of the frames are the same
-    writeFrameBuf();
-
-    clearFrameBuf();//Add a blank frame just to show
-    writeFrameBuf();//that it is animating correctly
-
-    render();
-    writeFrameBuf();
-    writeFrameBuf();
+    //  Do every third degree because writing to disk is painfully slow
+    for(int i=0; i<360; i+=3){
+        cout << "Deg: " << i << endl;
+        render();
+        writeFrameBuf();
+        rot((float)i);
+    }
 
 
     writeEndFile(); //Finish file
