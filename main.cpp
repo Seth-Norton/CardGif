@@ -219,37 +219,9 @@ void setView(){
     view[3]=vec(0, 0, 0, 1);
 
     persp[0]=vec(1.0f      , 0          , 0           , 0);
-    persp[1]=vec(0         ,-1.0f, 0           , 0);
+    persp[1]=vec(0         ,-1.0f       , 0           , 0);
     persp[2]=vec(0         , 0          , 101.0f/99.0f,-200.0f/99.0f);
     persp[3]=vec(0         , 0          , 1           , 0);
-
-    //  Debug   //
-    /*cout << "-- View matrix --" << endl;
-    for(int i=0; i<4; i++){
-        cout << view[i].x << " " << view[i].y << " "
-             << view[i].z << " " << view[i].w << " ";
-        cout << endl;
-    }
-    cout << endl << "-- Perspective matrix --" << endl;
-    for(int i=0; i<4; i++){
-        cout << persp[i].x << " " << persp[i].y << " "
-             << persp[i].z << " " << persp[i].w << " ";
-        cout << endl;
-    }
-
-    vec pos(3, 0, 0, 1);
-    cout << endl << "-- Pre-Translation --" << endl;
-    cout << pos.x << " " << pos.y << " "
-         << pos.z << " " << pos.w << " ";
-    cout << endl;
-
-    vec temp = matrixMult(view, pos);
-    temp = matrixMult(persp, temp);
-    temp = temp*(1.0f/temp.w);
-    cout << "-- Translated --" << endl;
-    cout << temp.x << " " << temp.y << " "
-         << temp.z << " " << temp.w << " ";
-    cout << endl;*/
 }
 
 void rot(float deg){
