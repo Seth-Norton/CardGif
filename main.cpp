@@ -85,7 +85,7 @@ ofstream outfile ("test.gif", ofstream::binary);
 //---   3D DATA   ---//
 
 /*
- * Thank you Paul Heckbert for this elegant vector setup.
+ * Thank you Andrew Kensler for this elegant vector setup.
  */
 struct vec{
     float x,y,z,w;
@@ -99,11 +99,20 @@ struct vec{
     vec operator+(vec b){
         return vec(x+b.x,y+b.y,z+b.z,w+b.z);
     }
+    vec operator-(vec b){
+        return vec(x-b.x,y-b.y,z-b.z,w-b.z);
+    }
     vec operator*(float b){
         return vec(x*b,y*b,z*b,w*b);
     }
     float operator%(vec b){
         return x*b.x+y*b.y+z*b.z+w*b.w;
+    }
+    vec operator^(vec b){ // Dot product that assumes we're only using three dimensions
+        return vec(y*b.z-z*b.y,z*b.x-x*b.z,x*b.y-y*b.x, 0);
+    }
+    vec operator!(){
+        return *this*(1 /sqrt(*this%*this));
     }
 };
 
@@ -253,33 +262,85 @@ void clearFrameBuf(){
     memset(frameBuf, backgroundColor, width*height);
 }
 
+vec project(vec v){
+    vec ret = matrixMult(view, v);
+    ret = matrixMult(persp, ret);
+    if(ret.w > 0)
+        ret = ret*(1.0f/ret.w);   // Correct for perspective
+
+    return ret;
+}
 
 /*
- * It may not be pretty, but now we take points
- * and put them as 20-pixel-wide horizontal lines.
- * Seeing as the points are in a nice line themselves,
- * it will make a thick line across the screen.
+ * Returns: false if outside triangle,
+ *          true if within triangle
+ */
+bool sameSide(vec p1, vec p2, vec a, vec b){
+    vec cp1 = (b-a)^(p1-a);
+    vec cp2 = (b-a)^(p2-a);
+    if(cp1%cp2 >= 0)
+        return true;
+    return false;
+}
+
+float withinTriangle(int x, int y, vec v1, vec v2, vec v3){
+    vec pix(((float)x)/width, ((float)y)/height, v1.z, 0);
+
+    if(sameSide(pix, v1, v2, v3) &&
+       sameSide(pix, v2, v1, v3) &&
+       sameSide(pix, v3, v1, v2))
+        return 1;
+    return 0;
+}
+
+
+/*
+ * Given three points, rasterize() will draw the triangle to the buffer.
+ */
+void rasterize(vec v1, vec v2, vec v3, vec nor){
+    vec light(0,0,1,0);
+    light = !light;
+    vec bot, top;
+    bot.x = min(min(v1.x, v2.x), v3.x);
+    bot.y = min(min(v1.y, v2.y), v3.y);
+
+    top.x = max(max(v1.x, v2.x), v3.x);
+    top.y = max(max(v1.y, v2.y), v3.y);
+
+    bot.x *= width;
+    bot.y *= height;
+    top.x *= width;
+    top.y *= height;
+
+
+
+    int col = (int)(126*(nor%light));
+    if(col < 0)
+        col = 0;
+
+    for(int y=bot.y+height/2; y<top.y+height/2; y++)
+        if(y > 0 && y < height)    // Early escape if y is out of frame
+            for(int x=bot.x+width/2; x<top.x+width/2; x++)
+                if(x > 0 && x < width){
+                    frameBuf[y*width+x] = withinTriangle(x-width/2, y-height/2, v1, v2, v3)*col;
+                }
+}
+
+/*
+ * For each triangle, we need to fill every point within that triangle.
+ * We will currently be ignoring the depth check normally done upon rasterizing.
  */
 void render(){
     clearFrameBuf();
-    for(int i=0; i<DATASIZE; i++){
-        vec v;
-        v = matrixMult(view, points[i]);
-        v = matrixMult(persp, v);
-        if(v.w > 0)
-            v = v*(1.0f/v.w);   // Correct for perspective
+    for(int i=2; i<DATASIZE; i+=3){
+        vec v1, v2, v3;
+        v1 = project(points[i-2]);
+        v2 = project(points[i-1]);
+        v3 = project(points[i]);
 
-        int lineWidth = 20;
-        for(int j=0; j<lineWidth; j++){
-            if(v.y < 1.0f && v.x < 1.0f &&
-               v.y >-1.0f && v.x >-1.0f){
-                vec pix(v.x*width, v.y*height, v.z, v.w);
-                frameBuf[((int)pix.y*width)+((height/2)*width)+(int)pix.x+j-lineWidth/2+width/2] = 126;
-            }
-            else{
-                cout << "Culled" << endl;
-            }
-        }
+        vec nor = !((points[i-1]-points[i-2])^(points[i]-points[i-2]));
+
+        rasterize(v1, v2, v3, nor);
     }
 }
 
@@ -290,19 +351,19 @@ int main()
     setView();
     makeData();
 
-    writeHeader();  //Set up file
-    writeGCT();
-    writeForceLoop();
-
+    writeHeader();                      // Set up file
+    writeGCT();                         // |
+    writeForceLoop();                   // |
+                                        // |
     //  Do every third degree because writing to disk is painfully slow
-    for(int i=0; i<360; i+=3){
-        cout << "Deg: " << i << endl;
-        render();
-        writeFrameBuf();
-        rot((float)i);
-    }
-
-
-    writeEndFile(); //Finish file
+    for(int i=0; i<360; i+=3){          // |
+        cout << "Deg: " << i << endl;   // |
+        render();                       // |
+        writeFrameBuf();                // |
+        rot((float)i);                  // |
+    }                                   // |
+                                        // |
+                                        // |
+    writeEndFile();                     //Finish file
     return 0;
 }
