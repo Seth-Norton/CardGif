@@ -19,11 +19,12 @@
 #include <fstream>  //For output file stream
 #include <string.h> //For memset()
 #include <math.h>   //For sin/cos
+#include <time.h>
 
-#define W 100      //Just for setting framebuffer size
-#define H 100      //without complaints about variable size
+#define W 200      //Just for setting framebuffer size
+#define H 200      //without complaints about variable size
 
-#define DATASIZE 3
+#define DATASIZE 9
 
 using namespace std;
 
@@ -247,6 +248,14 @@ void makeData(){
     points[0]=vec(0.0f , .7f,0.0f,1.0f);
     points[1]=vec(-1.0f,-.7f,0.0f,1.0f);
     points[2]=vec(1.0f ,-.7f,0.0f,1.0f);
+
+    points[3]=vec(1.0f , 1.7f,3.0f,1.0f);
+    points[4]=vec(0.0f,-1.7f,2.0f,1.0f);
+    points[5]=vec(2.0f ,-1.7f,2.0f,1.0f);
+
+    points[6]=vec(0.0f , .7f,0.0f,1.0f);
+    points[7]=vec(-1.0f,-.7f,0.0f,1.0f);
+    points[8]=vec(1.0f ,-.7f,0.0f,1.0f);
 }
 
 
@@ -284,7 +293,7 @@ bool sameSide(vec p1, vec p2, vec a, vec b){
 }
 
 float withinTriangle(int x, int y, vec v1, vec v2, vec v3){
-    vec pix(((float)x)/width, ((float)y)/height, v1.z, 0);
+    vec pix(((double)x)/width, ((double)y)/height, v1.z, 0);
 
     if(sameSide(pix, v1, v2, v3) &&
        sameSide(pix, v2, v1, v3) &&
@@ -322,7 +331,9 @@ void rasterize(vec v1, vec v2, vec v3, vec nor){
         if(y > 0 && y < height)    // Early escape if y is out of frame
             for(int x=bot.x+width/2; x<top.x+width/2; x++)
                 if(x > 0 && x < width){
-                    frameBuf[y*width+x] = withinTriangle(x-width/2, y-height/2, v1, v2, v3)*col;
+                    float within = withinTriangle(x-width/2, y-height/2, v1, v2, v3);
+                    if(within > 0)
+                        frameBuf[y*width+x] = within*col;
                 }
 }
 
@@ -350,6 +361,7 @@ int main()
 {
     setView();
     makeData();
+    clock_t start_t, process_t = 0, write_t = 0;
 
     writeHeader();                      // Set up file
     writeGCT();                         // |
@@ -358,12 +370,20 @@ int main()
     //  Do every third degree because writing to disk is painfully slow
     for(int i=0; i<360; i+=3){          // |
         cout << "Deg: " << i << endl;   // |
+        start_t = clock();              // |
         render();                       // |
+        process_t += clock()-start_t;   // |
+        start_t = clock();              // |
         writeFrameBuf();                // |
+        write_t += clock()-start_t;     // |
         rot((float)i);                  // |
     }                                   // |
                                         // |
                                         // |
-    writeEndFile();                     //Finish file
+    writeEndFile();                     // Finish file
+
+    cout << "Processing: " << process_t << " ms" << endl;
+    cout << "Writing:    " << write_t << " ms" << endl;
+    cin.ignore();
     return 0;
 }
