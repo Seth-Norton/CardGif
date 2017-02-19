@@ -19,6 +19,7 @@
 #include <fstream>  //For output file stream
 #include <string.h> //For memset()
 #include <math.h>   //For sin/cos
+#include <stdint.h>
 
 #define W 100      //Just for setting framebuffer size
 #define H 100      //without complaints about variable size
