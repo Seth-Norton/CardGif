@@ -135,9 +135,9 @@ void writeHeader(){
  */
 void writeGCT(){
     for(uint8_t x=0; x<127; x++){
-        outfile << x << (char)0 << (char)0;
+        outfile << x << (uint8_t)0 << x;
     }
-    outfile << (char)128 << (char)0 << (char)0;
+    outfile << (uint8_t)128 << (uint8_t)0 << (uint8_t)0;
 }
 
 
@@ -213,7 +213,7 @@ vec matrixMult(vec* a, vec b){
  * Translates scene to z=3.
  * Perspective is a 90 degree frustum with z-near=1, z-far=100
  */
-void setView(){
+void initView(){
     view[0]=vec(1, 0, 0, 0);
     view[1]=vec(0, 1, 0, 0);
     view[2]=vec(0, 0, 1, 3);
@@ -254,7 +254,7 @@ void setView(){
 }
 
 void rot(float deg){
-    setView();
+    initView();
     deg=deg*3.14159/180.0;
     view[0]=vec(cos(deg),-sin(deg),0,0);
     view[1]=vec(sin(deg),cos(deg),0,0);
@@ -316,21 +316,20 @@ void render(){
 //---  MAIN LOGIC  ---//
 int main()
 {
-    setView();
+    initView();
     makeData();
 
     writeHeader();  //Set up file
     writeGCT();
     writeForceLoop();
 
-    //  Do every third degree because writing to disk is painfully slow
+    //  Do every third degree because writing to disk and computing large resolutions is painfully slow
     for(int i=0; i<360; i+=3){
         cout << "Deg: " << i << endl;
         render();
         writeFrameBuf();
         rot((float)i);
     }
-
 
     writeEndFile(); //Finish file
     return 0;

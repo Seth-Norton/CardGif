@@ -6,3 +6,6 @@ bin/Debug/CardGif.exe
 CardGif.depend
 *.cbp
 CardGif.layout
+tags
+a.out
+*.swp
