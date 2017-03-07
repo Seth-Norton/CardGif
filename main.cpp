@@ -20,9 +20,10 @@
 #include <string.h> //For memset()
 #include <math.h>   //For sin/cos
 #include <time.h>
+#include <stdint.h>
 
-#define W 200      //Just for setting framebuffer size
-#define H 200      //without complaints about variable size
+#define W 500      //Just for setting framebuffer size
+#define H 500      //without complaints about variable size
 
 #define DATASIZE 9
 
@@ -343,13 +344,13 @@ void rasterize(vec v1, vec v2, vec v3, vec nor){
  */
 void render(){
     clearFrameBuf();
-    for(int i=2; i<DATASIZE; i+=3){
+    for(int i=0; i<DATASIZE-2; i+=3){
         vec v1, v2, v3;
-        v1 = project(points[i-2]);
-        v2 = project(points[i-1]);
-        v3 = project(points[i]);
+        v1 = project(points[i]);
+        v2 = project(points[i+1]);
+        v3 = project(points[i+2]);
 
-        vec nor = !((points[i-1]-points[i-2])^(points[i]-points[i-2]));
+        vec nor = !((points[i+1]-points[i])^(points[i+2]-points[i]));
 
         rasterize(v1, v2, v3, nor);
     }
@@ -361,29 +362,32 @@ int main()
 {
     setView();
     makeData();
-    clock_t start_t, process_t = 0, write_t = 0;
+    clock_t startT, processT = 0, writeT = 0;
 
     writeHeader();                      // Set up file
     writeGCT();                         // |
     writeForceLoop();                   // |
                                         // |
     //  Do every third degree because writing to disk is painfully slow
-    for(int i=0; i<360; i+=3){          // |
+    for(float i=0; i<360; i+=3){        // |
         cout << "Deg: " << i << endl;   // |
-        start_t = clock();              // |
+
+
+        startT = clock();               // |
         render();                       // |
-        process_t += clock()-start_t;   // |
-        start_t = clock();              // |
+        rot(i);                         // |
+        processT += clock()-startT;     // |
+
+
+        startT = clock();               // |
         writeFrameBuf();                // |
-        write_t += clock()-start_t;     // |
-        rot((float)i);                  // |
+        writeT += clock()-startT;       // |
     }                                   // |
                                         // |
                                         // |
     writeEndFile();                     // Finish file
 
-    cout << "Processing: " << process_t << " ms" << endl;
-    cout << "Writing:    " << write_t << " ms" << endl;
-    cin.ignore();
+    cout << "Processing: " << processT/1000 << " ms" << endl;
+    cout << "Writing:    " << writeT/1000 << " ms" << endl;
     return 0;
 }
