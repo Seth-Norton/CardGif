@@ -255,8 +255,9 @@ void setView(){
 void rot(float deg){
     setView();
     deg=deg*3.14159/180.0;
-    view[0]=vec(cos(deg),-sin(deg),0,0);
-    view[1]=vec(sin(deg),cos(deg),0,0);
+    view[0]=vec(cos(deg),0,sin(deg),0);
+    view[1]=vec(0,1,0,0);
+	view[2]=vec(-sin(deg),0,cos(deg),5);
 }
 
 /*
