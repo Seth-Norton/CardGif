@@ -107,6 +107,9 @@ struct vec{
     vec operator*(float b){
         return vec(x*b,y*b,z*b,w*b);
     }
+	vec operator*(vec b){
+		return vec(x*b.x, y*b.y, z*b.z, w*b.w);
+	}
     float operator%(vec b){
         return x*b.x+y*b.y+z*b.z+w*b.w;
     }
@@ -162,8 +165,21 @@ void writeForceLoop(){
     outfile << (char)0;
     outfile << (char)0;
     outfile << (char)0;
-
 }
+
+
+void writeFrameSpeedControl(){
+	outfile << (char)33;
+	outfile << (char)249;
+	outfile << (char)4;
+	outfile << (char)8;
+	outfile << (char)3;	//	Pause in 1/10 second, 30 FPS
+	outfile << (char)0;
+	outfile << (char)0;
+	outfile << (char)0;
+}
+
+
 
 /*
  *  Write image description
@@ -190,6 +206,7 @@ void writeImageEnd(){
  * Write the framebuffer data in uncompressed format
  */
 void writeFrameBuf(){
+	writeFrameSpeedControl();
     writeImageDesc();
     outfile << codeSize;
     for(uint16_t y=0; y<height; y++){
@@ -226,7 +243,7 @@ vec matrixMult(vec* a, vec b){
 void setView(){
     view[0]=vec(1, 0, 0, 0);
     view[1]=vec(0, 1, 0, 0);
-    view[2]=vec(0, 0, 1, 3);
+    view[2]=vec(0, 0, 1, 5);
     view[3]=vec(0, 0, 0, 1);
 
     persp[0]=vec(1.0f      , 0          , 0           , 0);
@@ -321,21 +338,115 @@ void rasterize(vec v1, vec v2, vec v3, vec nor){
     bot.y *= height;
     top.x *= width;
     top.y *= height;
+	
+	bot.x += width/2;
+	bot.y += height/2;
+	top.x += width/2;
+	top.y += height/2;
+	
+	
+	//	Counting on floating point math to avoid dividing by 0
+	double slope1 = (v1.y-v2.y)/(v1.x-v2.x);
+	double slope2 = (v1.y-v3.y)/(v1.x-v3.x);
+	double slope3 = (v3.y-v2.y)/(v3.x-v2.x);
+	
+	
 
 
 
     int col = (int)(126*(nor%light));
     if(col < 0)
         col = 0;
+	
+	
+	
 
-    for(int y=bot.y+height/2; y<top.y+height/2; y++)
-        if(y > 0 && y < height)    // Early escape if y is out of frame
-            for(int x=bot.x+width/2; x<top.x+width/2; x++)
+    for(int y=top.y; y>bot.y; y--)
+        if(y > 0 && y < height){    // Early escape if y is out of frame
+			//	Find entry and exit points for this scanline
+			
+			double ent1, ent2, ent3;
+			double ext1, ext2, ext3;
+			
+			if((float)slope1 != 0){
+				ent1 = v1.x*width + width/2 + (y-(v1.y*height + height/2))/slope1;
+				ext1 = ent1;
+				
+				if(ent1 < bot.x)
+					ent1 = width;
+				if(ext1 > top.x)
+					ext1 = 0;
+			}
+			else{
+				if(y == v1.y*height + height/2){
+					ent1 = bot.x;
+					ext1 = top.x;
+				}
+				else{
+					ent1 = width;
+					ext1 = 0;
+				}
+			}
+			
+			if((float)slope2 != 0){
+				ent2 = v1.x*width + width/2 + (y-(v1.y*height + height/2))/slope2;
+				ext2 = ent2;
+				
+				if(ent2 < bot.x)
+					ent2 = width;
+				if(ext2 > top.x)
+					ext2 = 0;
+			}
+			else{
+				if(y == v1.y*height + height/2){
+					ent2 = bot.x;
+					ext2 = top.x;
+				}
+				else{
+					ent2 = width;
+					ext2 = 0;
+				}
+			}
+			
+			if((float)slope3 != 0){
+				ent3 = v3.x*width + width/2 + (y-(v3.y*height + height/2))/slope3;
+				ext3 = ent3;
+				
+				if(ent3 < bot.x)
+					ent3 = width;
+				if(ext3 > top.x)
+					ext3 = 0;
+			}
+			else{
+				if(y == v3.y*height + height/2){
+					ent3 = bot.x;
+					ext3 = top.x;
+				}
+				else{
+					ent3 = width;
+					ext3 = 0;
+				}
+			}
+			
+			
+			int entry = min(min(ent1, ent2), ent3);
+			int exit = max(max(ext1, ext2), ext3);
+	
+	
+            for(int x=entry; x<exit; x++)
                 if(x > 0 && x < width){
-                    float within = withinTriangle(x-width/2, y-height/2, v1, v2, v3);
-                    if(within > 0)
-                        frameBuf[y*width+x] = within*col;
+					double coverage = 1;
+					if(x == entry){
+						coverage = 1-(min(min(ent1, ent2), ent3) - (double)x);
+					}
+					else if(x == exit-1){
+						coverage = max(max(ext1, ext2), ext3) - (double)x-1;
+					}
+	
+                    frameBuf[y*width+x] = min(col*coverage+frameBuf[y*width+x]*(1-coverage), (double)255);
                 }
+				
+		}
 }
 
 /*
@@ -354,6 +465,17 @@ void render(){
 
         rasterize(v1, v2, v3, nor);
     }
+	
+	
+	//	DEBUG: Draw image borders
+	for(int i = 0; i < width; i++){
+		frameBuf[i] = 100;
+		frameBuf[(height-1)*width+i] = 100;
+		
+		frameBuf[i*width] = 100;
+		frameBuf[i*width+width-1] = 100;
+	}
+	
 }
 
 
